@@ -9,6 +9,8 @@ import time
 import psutil
 import cpuinfo
 import GPUtil
+import sys
+import ctypes
 
 client = Client('127.0.0.1',9000) #vrchat默认端口
 def send(message):
@@ -16,7 +18,6 @@ def send(message):
 
 def get_device_info():
     device_info = {} #存储设备信息的字典
-
     cpu_name = cpuinfo.get_cpu_info().get("brand_raw","未识别型号") #获取CPU型号
     cpu_usage = psutil.cpu_percent(interval=1) #获取CPU使用率，interval参数表示测量的时间间隔，单位为秒
     device_info["cpu"] = {
@@ -39,6 +40,15 @@ def get_device_info():
                 "used":VRAM_used
             }
         } #将GPU信息存储到字典中
+    else:
+        device_info["gpu"] = {
+            "gpu_name":"未检测到GPU",
+            "gpu_usage":0.0,
+            "VRAM":{
+                "total":0.0,
+                "used":0.0
+            }
+        }
     ram = psutil.virtual_memory() #获取内存信息
     ram_total = ram.total / (1024 ** 3) #将内存总量转换为GB
     ram_used = ram.used / (1024 ** 3) #将已用内存转换为GB
@@ -51,6 +61,18 @@ def get_device_info():
     return device_info
 
 if __name__ == "__main__":
+    # 单实例检查（Windows 命名互斥），防止重复启动或被循环触发
+    try:
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        mutex_name = "Global\\GetDeviceInfoMutex"
+        mutex = kernel32.CreateMutexW(None, False, mutex_name)
+        if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+            # 已有实例运行，直接退出（不写日志，保持控制台输出清爽）
+            sys.exit(0)
+    except Exception:
+        # 互斥检查失败，不阻止程序运行；调试时会在控制台看到异常
+        pass
+
     while True:
         device_info = get_device_info() #获取设备信息
         message = f"CPU: {device_info['cpu']['cpu_name']}\nGPU: {device_info['gpu']['gpu_name']}\nCPU {device_info['cpu']['cpu_usage']:.2f}%|GPU {device_info['gpu']['gpu_usage']:.2f}%\nVRAM: {device_info['gpu']['VRAM']['used']:.2f}GB/{device_info['gpu']['VRAM']['total']:.2f}GB\nRAM: {device_info['ram']['ram_used']:.2f}GB/{device_info['ram']['ram_total']:.2f}GB"
