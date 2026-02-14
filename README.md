@@ -2,6 +2,7 @@
 
 这是一个使用osc制作的vrchat游戏插件
 
+
 **特性**
 - 获取 CPU、内存、GPU 等设备信息
 - 通过 OSC 协议发送数据（需在使用端处理接收）
@@ -10,12 +11,13 @@
 **先决条件**
 - Windows 或其他支持的操作系统
 - Python 3.12 及以上（推荐）
+- 运行GetDeviceInfo.py最佳显卡是N卡，A卡和I卡会有一些适配问题(如显存无法识别和占用率无法识别)
 
 **安装依赖**
 在命令行中运行：
 
 ```bash
-pip install psutil py-cpuinfo GPUtil python-osc
+pip install psutil py-cpuinfo GPUtil python-osc wmi
 ```
 
 如果提示 `pip` 不是内部或外部命令，检查 Python 是否已添加到系统环境变量。若提示需要升级 `pip`：
