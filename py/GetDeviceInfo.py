@@ -1,6 +1,6 @@
 """
 获取设备信息并发送到vrchat聊天框中
-前置库:pip install psutil py-cpuinfo GPUtil python-osc
+前置库:pip install psutil py-cpuinfo GPUtil python-osc wmi
 运行环境:Windows 11 Python 3.12
 2026-02-12 written by 小龙小龙
 """
@@ -31,42 +31,61 @@ def get_device_info():
         "cpu_usage":cpu_usage
     } #将CPU信息存储到字典中
 
-    gpus = GPUtil.getGPUs() #获取GPU信息
-    if gpus:
-        gpu = gpus[0] #假设只使用第一块GPU
-        gpu_name = gpu.name #获取GPU型号
-        gpu_usage = gpu.load * 100 #获取GPU使用率，load属性表示GPU的负载，范围为0到1
-        VRAM_total = gpu.memoryTotal / 1024 #获取GPU的总显存，单位为GB
-        VRAM_used = gpu.memoryUsed / 1024 #获取GPU的已用显存，单位为GB
-        device_info["gpu"] = {
-            "gpu_name":gpu_name,
-            "gpu_usage":gpu_usage,
-            "VRAM":{
-                "total":VRAM_total,
-                "used":VRAM_used
-            }
-        } #将GPU信息存储到字典中
-    else:
-        # 若GPUtil未检测到，尝试用WMI检测（兼容AMD/NVIDIA）
+    try:
+        gpus = GPUtil.getGPUs() #获取GPU信息
+        if gpus:
+            gpu = gpus[0] #假设只使用第一块GPU
+            gpu_name = gpu.name #获取GPU型号
+            gpu_usage = gpu.load * 100 #获取GPU使用率，load属性表示GPU的负载，范围为0到1
+            VRAM_total = gpu.memoryTotal / 1024 #获取GPU的总显存，单位为GB
+            VRAM_used = gpu.memoryUsed / 1024 #获取GPU的已用显存，单位为GB
+            device_info["gpu"] = {
+                "gpu_name":gpu_name,
+                "gpu_usage":gpu_usage,
+                "VRAM":{
+                    "total":VRAM_total,
+                    "used":VRAM_used
+                }
+            } #将GPU信息存储到字典中
+        else:
+            raise RuntimeError("GPUtil未检测到GPU")
+    except Exception as e:
+        # GPUtil异常或未检测到，尝试用WMI检测（兼容AMD/NVIDIA）
         gpu_name = "未检测到GPU"
         VRAM_total = 0.0
         if wmi and platform.system() == "Windows":
             try:
                 c = wmi.WMI()
                 controllers = list(c.Win32_VideoController())
-                if controllers:
-                    g = controllers[0]
-                    gpu_name = getattr(g, "Name", "未检测到GPU") or "未检测到GPU"
-                    ram = getattr(g, "AdapterRAM", 0) or 0
+                target_gpu = None
+                # 优先找AMD显卡
+                for g in controllers:
+                    name = getattr(g, "Name", "") or ""
+                    if "AMD" in name.upper() or "RADEON" in name.upper():
+                        target_gpu = g
+                        break
+                # 若无AMD，再找Intel
+                if not target_gpu:
+                    for g in controllers:
+                        name = getattr(g, "Name", "") or ""
+                        if "INTEL" in name.upper():
+                            target_gpu = g
+                            break
+                # 都没有则用第一个
+                if not target_gpu and controllers:
+                    target_gpu = controllers[0]
+                if target_gpu:
+                    gpu_name = getattr(target_gpu, "Name", "未检测到GPU") or "未检测到GPU"
+                    ram = getattr(target_gpu, "AdapterRAM", 0) or 0
                     VRAM_total = int(ram) / (1024 ** 3) if ram else 0.0
             except Exception:
                 pass
         device_info["gpu"] = {
             "gpu_name":gpu_name,
-            "gpu_usage":"--",
+            "gpu_usage":0.0,
             "VRAM":{
                 "total":VRAM_total,
-                "used":"--"
+                "used":0.0
             }
         }
     ram = psutil.virtual_memory() #获取内存信息
