@@ -11,6 +11,12 @@ import cpuinfo
 import GPUtil
 import sys
 import ctypes
+import platform
+
+try:
+    import wmi
+except ImportError:
+    wmi = None
 
 client = Client('127.0.0.1',9000) #vrchat默认端口
 def send(message):
@@ -41,12 +47,26 @@ def get_device_info():
             }
         } #将GPU信息存储到字典中
     else:
+        # 若GPUtil未检测到，尝试用WMI检测（兼容AMD/NVIDIA）
+        gpu_name = "未检测到GPU"
+        VRAM_total = 0.0
+        if wmi and platform.system() == "Windows":
+            try:
+                c = wmi.WMI()
+                controllers = list(c.Win32_VideoController())
+                if controllers:
+                    g = controllers[0]
+                    gpu_name = getattr(g, "Name", "未检测到GPU") or "未检测到GPU"
+                    ram = getattr(g, "AdapterRAM", 0) or 0
+                    VRAM_total = int(ram) / (1024 ** 3) if ram else 0.0
+            except Exception:
+                pass
         device_info["gpu"] = {
-            "gpu_name":"未检测到GPU",
-            "gpu_usage":0.0,
+            "gpu_name":gpu_name,
+            "gpu_usage":"--",
             "VRAM":{
-                "total":0.0,
-                "used":0.0
+                "total":VRAM_total,
+                "used":"--"
             }
         }
     ram = psutil.virtual_memory() #获取内存信息
